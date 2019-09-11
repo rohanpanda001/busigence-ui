@@ -5,8 +5,7 @@ import StepLabel from "@material-ui/core/StepLabel";
 import { Draggable, Droppable } from "react-drag-and-drop";
 import Avatar from "@material-ui/core/Avatar";
 import { lightGreen, grey } from "@material-ui/core/colors";
-import DragIndicatorIcon from "@material-ui/icons/DragIndicator";
-import ErrorIcon from "@material-ui/icons/Error";
+import { Error, CheckCircle, DragIndicator } from "@material-ui/icons";
 import {
   Stepper,
   Grid,
@@ -75,7 +74,8 @@ class App extends Component {
       selectedElements: {},
       activeStep: 0,
       showTable: false,
-      joinType: "inner"
+      joinType: "inner",
+      sortOrder: "asc"
     };
   }
 
@@ -178,7 +178,7 @@ class App extends Component {
       <Draggable type="table" data={table}>
         <Grid container direction="row">
           <span>
-            <DragIndicatorIcon fontSize="small" color="disabled" />
+            <DragIndicator fontSize="small" color="disabled" />
           </span>
           <span>{table}</span>
           <span style={{ paddingLeft: 10 }}>
@@ -218,8 +218,21 @@ class App extends Component {
   onCheckboxChange = (checklist, table) => {
     const { selectedElements = {} } = this.state;
     selectedElements[table] = checklist;
-    const columns = this.getPrimaryKeyList(selectedElements);
-    this.setState({ selectedElements, primaryKey: columns[0] });
+    const primaryKeys = this.getPrimaryKeyList(selectedElements);
+    const allColumns = this.getAllColumns(selectedElements);
+    this.setState({
+      selectedElements,
+      primaryKey: primaryKeys[0],
+      sortKey: allColumns[0]
+    });
+  };
+
+  getAllColumns = selectedElements => {
+    const columnList = Object.keys(selectedElements).reduce((acc, key) => {
+      return [...acc, ...selectedElements[key]];
+    }, []);
+    const columnSet = new Set(columnList);
+    return Array.from(columnSet);
   };
 
   getPrimaryKeyList = selectedElements => {
@@ -235,15 +248,35 @@ class App extends Component {
     return firstTableKeys.filter(key => secondTableKeys.includes(key));
   };
 
+  renderInfo = ({ icon, message }) => (
+    <span
+      style={{
+        fontSize: 10,
+        display: "flex",
+        paddingTop: 5,
+        paddingBottom: 5
+      }}
+    >
+      {icon}
+      <span style={{ paddingLeft: 5, alignSelf: "center" }}>{message}</span>
+    </span>
+  );
+
   renderOperations = operation => {
-    const { selectedElements = {}, joinLoader } = this.state;
-    const columns = this.getPrimaryKeyList(selectedElements);
-    const isPrimaryKeyAvailable = columns.length > 0;
+    const {
+      selectedElements = {},
+      joinLoader,
+      sortLoader,
+      finalJoinValue = [],
+      finalSortValue = []
+    } = this.state;
+    const primaryKeys = this.getPrimaryKeyList(selectedElements);
+    const isPrimaryKeyAvailable = primaryKeys.length > 0;
     if (operation.key === "join") {
       return (
         <div>
           <div style={{ paddingTop: 10, minWidth: 100 }}>
-            <span style={{ paddingRight: 10 }}>Selectjoin type</span>
+            <span style={{ paddingRight: 10 }}>Select join type</span>
             <Select
               onChange={value => this.setState({ joinType: value })}
               defaultValue="inner"
@@ -258,27 +291,18 @@ class App extends Component {
               <span style={{ paddingRight: 10 }}>Select primary key</span>
               <Select
                 onChange={value => this.setState({ primaryKey: value })}
-                defaultValue={columns[0]}
+                defaultValue={primaryKeys[0]}
               >
-                {columns.map(column => (
+                {primaryKeys.map(column => (
                   <Option value={column}>{column}</Option>
                 ))}
               </Select>
             </div>
           ) : (
-            <span
-              style={{
-                fontSize: 10,
-                display: "flex",
-                paddingTop: 5,
-                paddingBottom: 5
-              }}
-            >
-              <ErrorIcon fontSize="small" />{" "}
-              <span style={{ paddingLeft: 5, alignSelf: "center" }}>
-                No common keys found{" "}
-              </span>
-            </span>
+            this.renderInfo({
+              message: "No common keys found",
+              icon: <Error fontSize="small" />
+            })
           )}
 
           <div>
@@ -286,7 +310,7 @@ class App extends Component {
               type="primary"
               disabled={!isPrimaryKeyAvailable}
               onClick={() =>
-                this.setState({ joinLoader: true }, () => {
+                this.setState({ joinLoader: true, finalJoinValue: [] }, () => {
                   setTimeout(() => {
                     this.joinTable();
                     this.setState({ joinLoader: false });
@@ -302,7 +326,117 @@ class App extends Component {
                 <CircularProgress />
               </div>
             )}
+
+            {!!finalJoinValue.length && (
+              <div>
+                {this.renderInfo({
+                  message: "Join Successful",
+                  icon: <CheckCircle color={lightGreen[500]} fontSize="small" />
+                })}
+                <div>
+                  <Button
+                    type="primary"
+                    onClick={() => this.setState({ activeOperation: 1 })}
+                    style={{ marginTop: 5 }}
+                  >
+                    Next
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      this.setState({ showTable: true, rows: finalJoinValue })
+                    }
+                    style={{ marginTop: 5, marginLeft: 10 }}
+                  >
+                    Show Preview
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
+        </div>
+      );
+    } else if (operation.key === "sort") {
+      const columns = this.getAllColumns(selectedElements);
+      return (
+        <div>
+          <div>
+            <span style={{ paddingRight: 10 }}>Select sort field</span>
+            <Select
+              onChange={value => this.setState({ sortKey: value })}
+              defaultValue={columns[0]}
+            >
+              {columns.map(column => (
+                <Option value={column}>{column}</Option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <span style={{ paddingRight: 10 }}>Select sort order</span>
+            <Select
+              onChange={value => this.setState({ sortOrder: value })}
+              defaultValue="asc"
+            >
+              <Option value={"asc"}>ASC</Option>
+              <Option value={"desc"}>DESC</Option>
+            </Select>
+          </div>
+          <div>
+            <Button
+              type="primary"
+              onClick={() => {
+                this.setState({ sortLoader: true, finalSortValue: [] }, () => {
+                  setTimeout(() => {
+                    this.applySort();
+                    this.setState({ sortLoader: false });
+                  }, 2000);
+                })
+                
+              }}
+              style={{ marginTop: 5 }}
+            >
+              Apply Sort
+            </Button>
+            <Button
+              onClick={() => this.setState({ activeOperation: 0 })}
+              style={{ marginTop: 5, marginLeft: 10 }}
+            >
+              Back
+            </Button>
+          </div>
+          {sortLoader && (
+            <div style={{ marginTop: 20 }}>
+              <CircularProgress />
+            </div>
+          )}
+          {!!finalSortValue.length && (
+            <div>
+              {this.renderInfo({
+                message: "Sort Successful",
+                icon: <CheckCircle color={lightGreen[500]} fontSize="small" />
+              })}
+              <div>
+                <Button
+                  type="primary"
+                  onClick={() => this.setState({ activeOperation: 2 })}
+                  style={{ marginTop: 5 }}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    } else if (operation.key === "output") {
+      return (
+        <div>
+          <Button
+            type="primary"
+            onClick={() => this.setState({ rows: finalSortValue, showTable: true })}
+            style={{ marginTop: 5 }}
+          >
+            See final Output
+          </Button>
         </div>
       );
     }
@@ -422,6 +556,22 @@ class App extends Component {
     );
   };
 
+  applySort = async () => {
+    const { finalJoinValue = [], sortKey, sortOrder } = this.state;
+    const response = await axios({
+      ...params.post,
+      url: `${API_URL}proccessSort`,
+      data: {
+        sortKey,
+        isAscending: sortOrder === 'asc',
+        tableData: finalJoinValue
+      }
+    });
+    const { data } = response;
+    const rows = Object.keys(data).map(x => data[x]);
+    this.setState({ finalSortValue: rows });
+  };
+
   joinTable = async () => {
     const { selectedElements = {}, joinType, primaryKey } = this.state;
     const response = await axios({
@@ -433,8 +583,9 @@ class App extends Component {
         tables: selectedElements
       }
     });
-    // const { data } = response;
-    console.log(response);
+    const { data } = response;
+    const rows = Object.keys(data).map(x => data[x]);
+    this.setState({ finalJoinValue: rows });
   };
 
   render() {
