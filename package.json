@@ -1,13 +1,16 @@
 {
-  "name": "dashboard",
+  "name": "busigence",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@material-ui/core": "^4.4.1",
+    "@material-ui/icons": "^4.4.1",
     "antd": "^3.19.1",
     "axios": "^0.19.0",
     "d3": "^5.9.2",
     "react": "^16.4.1",
     "react-dom": "^16.4.1",
+    "react-drag-and-drop": "^3.0.0",
     "react-scripts": "1.1.4"
   },
   "scripts": {
