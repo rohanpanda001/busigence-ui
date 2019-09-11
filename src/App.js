@@ -1,12 +1,14 @@
 import React, { Component } from "react";
 import axios from "axios";
-import Stepper from "@material-ui/core/Stepper";
+import { Stepper, Grid, Typography } from "@material-ui/core";
 import Step from "@material-ui/core/Step";
 import StepLabel from "@material-ui/core/StepLabel";
 import { Draggable, Droppable } from "react-drag-and-drop";
 import Avatar from "@material-ui/core/Avatar";
-import { grey } from "@material-ui/core/colors";
-import { DragIndicatorIcon } from "@material-ui/icons";
+import { lightGreen, grey } from "@material-ui/core/colors";
+// import DragIndicatorIcon from "@material-ui/icons/DragIndicatorIcon";
+import DragIndicatorIcon from "@material-ui/icons/DragIndicator";
+// import Grid from "@material-ui/core/Grid";
 import {
   Radio,
   Row,
@@ -27,6 +29,7 @@ import "./App.css";
 const { Panel } = Collapse;
 const CheckboxGroup = Checkbox.Group;
 const defaultPadding = { padding: 10 };
+const iconHeight = { height: 100, width: 100 };
 const API_URL = "http://127.0.0.1:5000/";
 const steps = ["Select Format", "Select Source", "Visualiser"];
 const params = {
@@ -149,24 +152,22 @@ class App extends Component {
 
   renderHeader = table => {
     return (
-      <div>
-        <Draggable type="table" data={table}>
-          <DragIndicatorIcon />
+      <Draggable type="table" data={table}>
+        <Grid container direction="row">
+          <span>
+            <DragIndicatorIcon fontSize="small" color="disabled" />
+          </span>
           <span>{table}</span>
           <span style={{ paddingLeft: 10 }}>
             <Button
-              onClick={e => {
-                e.stopPropagation();
-                this.setState({ showTable: true }, () =>
-                  this.onTableOpen(table)
-                );
-              }}
+              size="small"
+              onClick={e => this.setState({ showTable: true })}
             >
               Preview
             </Button>
           </span>
-        </Draggable>
-      </div>
+        </Grid>
+      </Draggable>
     );
   };
 
@@ -198,51 +199,93 @@ class App extends Component {
   };
 
   renderVisualize = () => {
-    const { seletedElements = {} } = this.state;
-    // const canVisualize = Object.keys(seletedElements).filter(
-    //   x => seletedElements[x].length
-    // ).length;
+    const {
+      seletedElements = {},
+      tables = [],
+      selectedTables = {}
+    } = this.state;
+    if (!tables.length) {
+      return null;
+    }
 
-    // if (!canVisualize) {
-    //   return null;
-    // }
+    const firstTable = selectedTables[1];
+    const secondTable = selectedTables[2];
 
-    const tables = Object.keys(seletedElements);
+    const {
+      [firstTable]: firstTableKeys = [],
+      [secondTable]: secondTableKeys = []
+    } = seletedElements;
+
     return (
       <div>
-        <Droppable types={["table"]} onDrop={x => console.log(x)}>
-          <Avatar
-            style={{
-              height: 100,
-              width: 100,
-              backgroundColor: grey,
-              color: "#fff"
-            }}
-          >
-            Drop here
-          </Avatar>
-        </Droppable>
+        <Row>
+          <Col span={12}>
+            <Row>
+              <Droppable
+                types={["table"]}
+                onDrop={({ table }) =>
+                  this.setState({
+                    selectedTables: { ...selectedTables, 1: table }
+                  })
+                }
+              >
+                <Avatar
+                  style={{
+                    ...iconHeight,
+                    backgroundColor: firstTable ? lightGreen[500] : grey,
+                    color: "#fff"
+                  }}
+                >
+                  {firstTable || "Table 1"}
+                </Avatar>
+              </Droppable>
+            </Row>
+            <Row>
+              {firstTable ? (
+                <div style={{ marginTop: 10 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Selected Keys:
+                  </Typography>
+                  {firstTableKeys.length
+                    ? firstTableKeys.map(key => <Tag>{key}</Tag>)
+                    : "-"}
+                </div>
+              ) : null}
+            </Row>
+          </Col>
+          <Col span={12}>
+            <Droppable
+              types={["table"]}
+              onDrop={({ table }) =>
+                this.setState({
+                  selectedTables: { ...selectedTables, 2: table }
+                })
+              }
+            >
+              <Avatar
+                style={{
+                  ...iconHeight,
+                  backgroundColor: secondTable ? lightGreen[500] : grey,
+                  color: "#fff"
+                }}
+              >
+                {secondTable || "Table 2"}
+              </Avatar>
+            </Droppable>
+            {secondTable ? (
+              <div style={{ marginTop: 10 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Selected Keys
+                </Typography>
+                {secondTableKeys.length
+                  ? secondTableKeys.map(key => <Tag>{key}</Tag>)
+                  : "-"}
+              </div>
+            ) : null}
+          </Col>
+        </Row>
       </div>
     );
-    // return (
-    //   <div style={defaultPadding}>
-    //     {tables.map(table => {
-    //       return (
-    //         <div>
-    //           <strong>{table}</strong>:{" "}
-    //           {seletedElements[table].map(field => (
-    //             <Tag>{field}</Tag>
-    //           ))}
-    //         </div>
-    //       );
-    //     })}
-    //     {tables.length > 1 ? (
-    //       <Button type="primary" onClick={this.joinTable}>
-    //         JOIN
-    //       </Button>
-    //     ) : null}
-    //   </div>
-    // );
   };
 
   joinTable = async () => {
@@ -274,7 +317,7 @@ class App extends Component {
 
     return (
       <div style={{ padding: 50 }}>
-        <div style={{ width: "70%" }}>
+        <div style={{ width: "80%" }}>
           <Stepper activeStep={activeStep}>
             {steps.map((label, index) => {
               const stepProps = {};
