@@ -1,14 +1,19 @@
 import React, { Component } from "react";
 import axios from "axios";
-import { Stepper, Grid, Typography } from "@material-ui/core";
 import Step from "@material-ui/core/Step";
 import StepLabel from "@material-ui/core/StepLabel";
 import { Draggable, Droppable } from "react-drag-and-drop";
 import Avatar from "@material-ui/core/Avatar";
 import { lightGreen, grey } from "@material-ui/core/colors";
-// import DragIndicatorIcon from "@material-ui/icons/DragIndicatorIcon";
 import DragIndicatorIcon from "@material-ui/icons/DragIndicator";
-// import Grid from "@material-ui/core/Grid";
+import ErrorIcon from "@material-ui/icons/Error";
+import {
+  Stepper,
+  Grid,
+  Typography,
+  StepContent,
+  CircularProgress
+} from "@material-ui/core";
 import {
   Radio,
   Row,
@@ -22,24 +27,41 @@ import {
   Table,
   Checkbox,
   Tag,
-  Modal
+  Modal,
+  Select
 } from "antd";
 import "./App.css";
 
 const { Panel } = Collapse;
+const { Option } = Select;
 const CheckboxGroup = Checkbox.Group;
 const defaultPadding = { padding: 10 };
 const iconHeight = { height: 100, width: 100 };
 const API_URL = "http://127.0.0.1:5000/";
 const steps = ["Select Format", "Select Source", "Visualiser"];
+const operations = [
+  {
+    key: "join",
+    label: "Join Tables",
+    description: "Select primary key for joining and type of join."
+  },
+  {
+    key: "sort",
+    label: "Sort Table",
+    description: "Which field you want to sort?"
+  },
+  {
+    key: "output",
+    label: "Final Output",
+    description: "Here is the final table"
+  }
+];
 const params = {
   post: {
     method: "post",
     config: {
       headers: {
-        // 'Access-Control-Allow-Origin': '*',
         "Content-Type": "application/json"
-        // "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept"
       }
     }
   }
@@ -50,9 +72,10 @@ class App extends Component {
     super(props);
     this.state = {
       format: "mysql",
-      seletedElements: {},
+      selectedElements: {},
       activeStep: 0,
-      showTable: false
+      showTable: false,
+      joinType: "inner"
     };
   }
 
@@ -193,16 +216,104 @@ class App extends Component {
   };
 
   onCheckboxChange = (checklist, table) => {
-    const { seletedElements = {} } = this.state;
-    seletedElements[table] = checklist;
-    this.setState({ seletedElements });
+    const { selectedElements = {} } = this.state;
+    selectedElements[table] = checklist;
+    const columns = this.getPrimaryKeyList(selectedElements);
+    this.setState({ selectedElements, primaryKey: columns[0] });
+  };
+
+  getPrimaryKeyList = selectedElements => {
+    const { selectedTables = {} } = this.state;
+    const firstTable = selectedTables[1];
+    const secondTable = selectedTables[2];
+
+    const {
+      [firstTable]: firstTableKeys = [],
+      [secondTable]: secondTableKeys = []
+    } = selectedElements;
+
+    return firstTableKeys.filter(key => secondTableKeys.includes(key));
+  };
+
+  renderOperations = operation => {
+    const { selectedElements = {}, joinLoader } = this.state;
+    const columns = this.getPrimaryKeyList(selectedElements);
+    const isPrimaryKeyAvailable = columns.length > 0;
+    if (operation.key === "join") {
+      return (
+        <div>
+          <div style={{ paddingTop: 10, minWidth: 100 }}>
+            <span style={{ paddingRight: 10 }}>Selectjoin type</span>
+            <Select
+              onChange={value => this.setState({ joinType: value })}
+              defaultValue="inner"
+            >
+              <Option value="inner">inner</Option>
+              <Option value="outer">outer</Option>
+            </Select>
+          </div>
+
+          {isPrimaryKeyAvailable ? (
+            <div style={{ minWidth: 100 }}>
+              <span style={{ paddingRight: 10 }}>Select primary key</span>
+              <Select
+                onChange={value => this.setState({ primaryKey: value })}
+                defaultValue={columns[0]}
+              >
+                {columns.map(column => (
+                  <Option value={column}>{column}</Option>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <span
+              style={{
+                fontSize: 10,
+                display: "flex",
+                paddingTop: 5,
+                paddingBottom: 5
+              }}
+            >
+              <ErrorIcon fontSize="small" />{" "}
+              <span style={{ paddingLeft: 5, alignSelf: "center" }}>
+                No common keys found{" "}
+              </span>
+            </span>
+          )}
+
+          <div>
+            <Button
+              type="primary"
+              disabled={!isPrimaryKeyAvailable}
+              onClick={() =>
+                this.setState({ joinLoader: true }, () => {
+                  setTimeout(() => {
+                    this.joinTable();
+                    this.setState({ joinLoader: false });
+                  }, 2000);
+                })
+              }
+              style={{ marginTop: 5 }}
+            >
+              Join
+            </Button>
+            {joinLoader && (
+              <div style={{ marginTop: 20 }}>
+                <CircularProgress />
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
   };
 
   renderVisualize = () => {
     const {
-      seletedElements = {},
+      selectedElements = {},
       tables = [],
-      selectedTables = {}
+      selectedTables = {},
+      activeOperation
     } = this.state;
     if (!tables.length) {
       return null;
@@ -214,11 +325,11 @@ class App extends Component {
     const {
       [firstTable]: firstTableKeys = [],
       [secondTable]: secondTableKeys = []
-    } = seletedElements;
+    } = selectedElements;
 
     return (
       <div>
-        <Row>
+        <Row style={{ height: 250 }}>
           <Col span={12}>
             <Row>
               <Droppable
@@ -284,18 +395,42 @@ class App extends Component {
             ) : null}
           </Col>
         </Row>
+
+        {firstTable && secondTable && Object.keys(selectedElements).length > 1 && (
+          <div>
+            <h3>Operations:</h3>
+            <Stepper activeStep={activeOperation} orientation="vertical">
+              {operations.map(operation => {
+                return (
+                  <Step key={operation.label}>
+                    <StepLabel>{operation.label}</StepLabel>
+                    <StepContent>
+                      <div>
+                        <Typography variant="subtitle2" gutterBottom>
+                          {operation.description}
+                        </Typography>
+                      </div>
+                      {this.renderOperations(operation)}
+                    </StepContent>
+                  </Step>
+                );
+              })}
+            </Stepper>
+          </div>
+        )}
       </div>
     );
   };
 
   joinTable = async () => {
-    const { seletedElements = {} } = this.state;
+    const { selectedElements = {}, joinType, primaryKey } = this.state;
     const response = await axios({
       ...params.post,
       url: `${API_URL}proccessJoin`,
       data: {
-        join_type: "inner",
-        tables: seletedElements
+        joinType,
+        primaryKey,
+        tables: selectedElements
       }
     });
     // const { data } = response;
@@ -310,7 +445,7 @@ class App extends Component {
       showTable,
       currentTable,
       rows = [],
-      seletedElements = {},
+      selectedElements = {},
       activeStep
     } = this.state;
     const columns = this.getColumns(currentTable);
@@ -319,12 +454,10 @@ class App extends Component {
       <div style={{ padding: 50 }}>
         <div style={{ width: "80%" }}>
           <Stepper activeStep={activeStep}>
-            {steps.map((label, index) => {
-              const stepProps = {};
-              const labelProps = {};
+            {steps.map(label => {
               return (
-                <Step key={label} {...stepProps}>
-                  <StepLabel {...labelProps}>{label}</StepLabel>
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
                 </Step>
               );
             })}
@@ -359,7 +492,7 @@ class App extends Component {
                             {tables.map(table => {
                               const {
                                 [table]: checklist = []
-                              } = seletedElements;
+                              } = selectedElements;
                               return (
                                 <Panel
                                   header={this.renderHeader(table)}
