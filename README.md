@@ -1,4 +1,3 @@
-### Arbitrage Trader
 
 #### Clone the repo
 
