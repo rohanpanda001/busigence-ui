@@ -13,9 +13,10 @@ import {
   getAllColumns,
   getPrimaryKeyList,
   renderInfo,
-  params
+  params,
+  exportCSVFile
 } from "./utils/utils";
-import { Button, Select } from "antd";
+import { Button, Select, Input } from "antd";
 import { CheckCircle, Error } from "@material-ui/icons";
 
 const API_URL = "http://127.0.0.1:5000/";
@@ -108,7 +109,8 @@ export default class Operations extends React.Component {
       joinLoader,
       sortLoader,
       finalJoinValue = [],
-      finalSortValue = []
+      finalSortValue = [],
+      newTable
     } = this.state;
     const columns = getAllColumns(selectedElements);
     const primaryKeys = getPrimaryKeyList(selectedElements, selectedTables);
@@ -265,26 +267,68 @@ export default class Operations extends React.Component {
     } else if (operation.key === "output") {
       return (
         <div style={{ marginTop: 10 }}>
-          <Button
-            type="primary"
-            onClick={() => showTable({ table: finalSortValue, columns })}
-          >
-            See final Output
-          </Button>
-          <Button
-            onClick={() => this.setState({ activeOperation: 1 })}
-            style={{ marginLeft: 10 }}
-          >
-            Back
-          </Button>
+          <div>
+            <Button
+              type="primary"
+              onClick={() => showTable({ table: finalSortValue, columns })}
+            >
+              See final Output
+            </Button>
+            <Button
+              onClick={() => this.setState({ activeOperation: 1 })}
+              style={{ marginLeft: 10 }}
+            >
+              Back
+            </Button>
+          </div>
+          {/* <div style={{ marginBottom: 10, marginTop: 10 }}>
+            <span style={{ marginRight: 10 }}>Write to DB?</span>
+            <Input
+              style={{ marginRight: 10, width: 200 }}
+              placeholder="Table Name"
+              value={newTable}
+              onChange={e => this.setState({ newTable: e.target.value })}
+            />
+            <Button disabled={!newTable} type="primary" onClick={this.insertDB}>
+              Submit
+            </Button>
+          </div> */}
+          <div style={{ marginTop: 10 }}>
+            <Button type="primary" onClick={this.downloadCSV}>
+              Download CSV
+            </Button>
+          </div>
         </div>
       );
     }
   };
 
+  downloadCSV = () => {
+    const { finalSortValue: data } = this.state;
+    const { selectedElements = {} } = this.props;
+    const columns = getAllColumns(selectedElements);
+    const headers = columns.reduce((acc, val) => ({ ...acc, [val]: val }), {});
+    exportCSVFile(document, headers, data, "output");
+  };
+
+  //   insertDB = async () => {
+  //     const { newTable, finalSortValue } = this.state;
+  //     const { database } = this.props;
+
+  //     const response = await axios({
+  //       ...params.post,
+  //       url: `${API_URL}insertView`,
+  //       data: {
+  //         database,
+  //         tableName: newTable,
+  //         tableData: finalSortValue
+  //       }
+  //     });
+  //     console.log(response);
+  //   };
+
   render() {
     const { activeOperation } = this.state;
-    console.log(activeOperation);
     return (
       <div>
         <h3>Operations:</h3>
