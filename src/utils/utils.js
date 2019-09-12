@@ -46,13 +46,13 @@ export const renderInfo = ({ icon, message }) => (
 );
 
 function convertToCSV(objArray) {
-  var array = typeof objArray != "object" ? JSON.parse(objArray) : objArray;
+  var array = typeof objArray !== "object" ? JSON.parse(objArray) : objArray;
   var str = "";
 
   for (var i = 0; i < array.length; i++) {
     var line = "";
     for (var index in array[i]) {
-      if (line != "") line += ",";
+      if (line !== "") line += ",";
 
       line += array[i][index];
     }
@@ -94,3 +94,26 @@ export function exportCSVFile(document, headers, items, fileTitle) {
     }
   }
 }
+
+export function processData(csv) {
+  var allTextLines = csv.split(/\r\n|\n/);
+  var lines = [];
+  for (var i = 0; i < allTextLines.length; i++) {
+    var data = allTextLines[i].split(",");
+    var tarr = [];
+    for (var j = 0; j < data.length; j++) {
+      tarr.push(data[j]);
+    }
+    lines.push(tarr);
+  }
+  return lines;
+}
+
+export const getRows = (data, columns) =>
+  data.map(row => {
+    return row.reduce((acc, field, index) => {
+      const { [index]: key } = columns;
+      acc[key] = field;
+      return acc;
+    }, {});
+  });

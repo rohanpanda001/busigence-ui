@@ -14,11 +14,11 @@ export default class Visualize extends React.Component {
   }
 
   render() {
-    const { selectedElements = {}, tables = [], showTable } = this.props;
+    const { selectedElements = {}, canVisualize, showTable } = this.props;
     const { selectedTables = {} } = this.state;
     const iconHeight = { height: 100, width: 100 };
 
-    if (!tables.length) {
+    if (!canVisualize) {
       return null;
     }
 

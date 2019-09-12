@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import axios from "axios";
 import { Draggable } from "react-drag-and-drop";
 import { DragIndicator } from "@material-ui/icons";
+import ReactFileReader from "react-file-reader";
 import { Grid, Step, Stepper, StepLabel } from "@material-ui/core";
 import {
   Radio,
@@ -19,7 +20,7 @@ import {
 } from "antd";
 import "./App.css";
 import Visualize from "./Visualize";
-import { params } from "./utils/utils";
+import { params, processData, getRows } from "./utils/utils";
 
 const { Panel } = Collapse;
 
@@ -57,7 +58,7 @@ class App extends Component {
         "Freight"
       ];
     }
-    return tableKeys.map(x => ({ title: x, dataIndex: x, key: x }));
+    return tableKeys;
   };
 
   submitMysql = async () => {
@@ -110,17 +111,32 @@ class App extends Component {
   renderCSV = () => {
     return (
       <div style={{ paddingTop: 20 }}>
-        <Upload
-          name="file"
-          action="https://www.mocky.io/v2/5cc8019d300000980a055e76"
-          onChange={this.onChange}
-        >
-          <Button>
-            <Icon type="upload" /> Click to Upload
-          </Button>
-        </Upload>
+        <ReactFileReader handleFiles={this.handleFiles} fileTypes={".csv"}>
+          <Button type="dashed">Upload</Button>
+        </ReactFileReader>
       </div>
     );
+  };
+
+  handleFiles = files => {
+    const { importedTables = [], importedTableData = {} } = this.state;
+    const file = files[0];
+    const fileName = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const result = e.target.result;
+      const lines = processData(result);
+      const columns = lines[0];
+      const data = lines.slice(1);
+      const rows = getRows(data, columns);
+      importedTableData[fileName] = rows;
+      this.setState({
+        importedTables: [...importedTables, fileName],
+        importedTableData,
+        canVisualize: Object.keys(importedTableData).length > 1
+      });
+    };
+    reader.readAsText(file);
   };
 
   onDBOpen = async activeDB => {
@@ -130,12 +146,17 @@ class App extends Component {
         url: `${API_URL}showTables`,
         data: { db: activeDB }
       });
-      const { data: tables = [] } = response;
-      this.setState({ tables: tables.map(table => table[0]) });
+      const { data = [] } = response;
+      const tables = data.map(table => table[0]);
+      this.setState({ tables, canVisualize: tables.length > 1 });
     }
   };
 
   renderHeader = table => {
+    const {
+      format,
+      importedTableData: { [table]: tableData } = {}
+    } = this.state;
     return (
       <Draggable type="table" data={table}>
         <Grid container direction="row">
@@ -147,8 +168,18 @@ class App extends Component {
             <Button
               size="small"
               onClick={async () => {
-                await this.onTableOpen();
-                this.setState({ showTable: true });
+                if (format === "mysql") {
+                  await this.onTableOpen();
+                  this.setState({ showTable: true });
+                } else {
+                  const columns = Object.keys(tableData[0]);
+                  this.setState({
+                    showTable: true,
+                    rows: tableData,
+                    columns,
+                    tableKeys: columns
+                  });
+                }
               }}
             >
               Preview
@@ -168,20 +199,13 @@ class App extends Component {
         data: { table }
       });
       const columns = this.getColumns(table);
-      const { data: rows = [] } = response;
-      const modifiedRows = rows.map(row => {
-        return row.reduce((acc, field, index) => {
-          const { [index]: { key } = {} } = columns;
-          acc[key] = field;
-          return acc;
-        }, {});
-      });
-      const tableKeys = Object.keys(modifiedRows[0]);
+      const { data = [] } = response;
+      const rows = getRows(data, columns);
       this.setState({
         currentTable: table,
-        columns,
-        rows: modifiedRows,
-        tableKeys
+        columns: columns.map(x => ({ title: x, dataIndex: x, key: x })),
+        rows,
+        tableKeys: columns
       });
     }
   };
@@ -194,17 +218,85 @@ class App extends Component {
     });
   };
 
+  importedTableChange = table => {
+    const { importedTableData } = this.state;
+    const { [table]: tableData = [] } = importedTableData;
+    const tableKeys = Object.keys(tableData[0]);
+    this.setState({ tableKeys });
+  };
+
+  renderSource = () => {
+    const {
+      databases,
+      tableKeys = [],
+      selectedElements = {},
+      importedTables = [],
+      format,
+      tables = [],
+      importedTableData = {}
+    } = this.state;
+    return (
+      <div style={defaultPadding}>
+        {format === "mysql" && databases ? (
+          <Collapse accordion onChange={this.onDBOpen}>
+            {databases.map(db => (
+              <Panel header={db} key={db}>
+                <span>Tables: </span>
+                <Collapse accordion onChange={this.onTableOpen}>
+                  {tables.map(table => {
+                    const { [table]: checklist = [] } = selectedElements;
+                    return (
+                      <Panel header={this.renderHeader(table)} key={table}>
+                        {tableKeys.length ? (
+                          <CheckboxGroup
+                            options={tableKeys}
+                            value={checklist}
+                            onChange={list =>
+                              this.onCheckboxChange(list, table)
+                            }
+                          />
+                        ) : null}
+                      </Panel>
+                    );
+                  })}
+                </Collapse>
+              </Panel>
+            ))}
+          </Collapse>
+        ) : Object.keys(importedTableData).length ? (
+          <div>
+            <span>Tables imported</span>
+            <Collapse accordion onChange={this.importedTableChange}>
+              {importedTables.map(table => {
+                const { [table]: checklist = [] } = selectedElements;
+                return (
+                  <Panel header={this.renderHeader(table)} key={table}>
+                    {tableKeys.length ? (
+                      <CheckboxGroup
+                        options={tableKeys}
+                        value={checklist}
+                        onChange={list => this.onCheckboxChange(list, table)}
+                      />
+                    ) : null}
+                  </Panel>
+                );
+              })}
+            </Collapse>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   render() {
     const {
       format,
-      databases,
-      tables = [],
       showTable,
       selectedElements = {},
       activeStep,
       rows = [],
       columns = [],
-      tableKeys = []
+      canVisualize
     } = this.state;
 
     return (
@@ -238,48 +330,13 @@ class App extends Component {
                   </div>
                 </div>
               </Col>
-              <Col span={12}>
-                {databases ? (
-                  <div style={defaultPadding}>
-                    <Collapse accordion onChange={this.onDBOpen}>
-                      {databases.map(db => (
-                        <Panel header={db} key={db}>
-                          <span>Tables: </span>
-                          <Collapse accordion onChange={this.onTableOpen}>
-                            {tables.map(table => {
-                              const {
-                                [table]: checklist = []
-                              } = selectedElements;
-                              return (
-                                <Panel
-                                  header={this.renderHeader(table)}
-                                  key={table}
-                                >
-                                  {tableKeys.length ? (
-                                    <CheckboxGroup
-                                      options={tableKeys}
-                                      value={checklist}
-                                      onChange={list =>
-                                        this.onCheckboxChange(list, table)
-                                      }
-                                    />
-                                  ) : null}
-                                </Panel>
-                              );
-                            })}
-                          </Collapse>
-                        </Panel>
-                      ))}
-                    </Collapse>
-                  </div>
-                ) : null}
-              </Col>
+              <Col span={12}>{this.renderSource()}</Col>
             </Row>
           </Col>
           <Col span={12} style={{ paddingLeft: 50 }}>
             <Visualize
               selectedElements={selectedElements}
-              tables={tables}
+              canVisualize={canVisualize}
               showTable={({ table, columns = columns }) =>
                 this.setState({
                   showTable: true,

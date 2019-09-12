@@ -1,6 +1,5 @@
 import React from "react";
 import axios from "axios";
-import { lightGreen } from "@material-ui/core/colors";
 import {
   Stepper,
   Typography,
