@@ -1,18 +1,8 @@
 import React, { Component } from "react";
 import axios from "axios";
-import Step from "@material-ui/core/Step";
-import StepLabel from "@material-ui/core/StepLabel";
-import { Draggable, Droppable } from "react-drag-and-drop";
-import Avatar from "@material-ui/core/Avatar";
-import { lightGreen, grey } from "@material-ui/core/colors";
-import { Error, CheckCircle, DragIndicator } from "@material-ui/icons";
-import {
-  Stepper,
-  Grid,
-  Typography,
-  StepContent,
-  CircularProgress
-} from "@material-ui/core";
+import { Draggable } from "react-drag-and-drop";
+import { DragIndicator } from "@material-ui/icons";
+import { Grid, Step, Stepper, StepLabel } from "@material-ui/core";
 import {
   Radio,
   Row,
@@ -25,46 +15,18 @@ import {
   Collapse,
   Table,
   Checkbox,
-  Tag,
-  Modal,
-  Select
+  Modal
 } from "antd";
 import "./App.css";
+import Visualize from "./Visualize";
+import { params } from "./utils/utils";
 
 const { Panel } = Collapse;
-const { Option } = Select;
+
 const CheckboxGroup = Checkbox.Group;
 const defaultPadding = { padding: 10 };
-const iconHeight = { height: 100, width: 100 };
 const API_URL = "http://127.0.0.1:5000/";
 const steps = ["Select Format", "Select Source", "Visualiser"];
-const operations = [
-  {
-    key: "join",
-    label: "Join Tables",
-    description: "Select primary key for joining and type of join."
-  },
-  {
-    key: "sort",
-    label: "Sort Table",
-    description: "Which field you want to sort?"
-  },
-  {
-    key: "output",
-    label: "Final Output",
-    description: "Here is the final table"
-  }
-];
-const params = {
-  post: {
-    method: "post",
-    config: {
-      headers: {
-        "Content-Type": "application/json"
-      }
-    }
-  }
-};
 
 class App extends Component {
   constructor(props) {
@@ -184,7 +146,10 @@ class App extends Component {
           <span style={{ paddingLeft: 10 }}>
             <Button
               size="small"
-              onClick={e => this.setState({ showTable: true })}
+              onClick={async () => {
+                await this.onTableOpen();
+                this.setState({ showTable: true });
+              }}
             >
               Preview
             </Button>
@@ -211,381 +176,22 @@ class App extends Component {
           return acc;
         }, {});
       });
-      this.setState({ currentTable: table, rows: modifiedRows });
+      const tableKeys = Object.keys(modifiedRows[0]);
+      this.setState({
+        currentTable: table,
+        columns,
+        rows: modifiedRows,
+        tableKeys
+      });
     }
   };
 
   onCheckboxChange = (checklist, table) => {
     const { selectedElements = {} } = this.state;
     selectedElements[table] = checklist;
-    const primaryKeys = this.getPrimaryKeyList(selectedElements);
-    const allColumns = this.getAllColumns(selectedElements);
     this.setState({
-      selectedElements,
-      primaryKey: primaryKeys[0],
-      sortKey: allColumns[0]
+      selectedElements
     });
-  };
-
-  getAllColumns = selectedElements => {
-    const columnList = Object.keys(selectedElements).reduce((acc, key) => {
-      return [...acc, ...selectedElements[key]];
-    }, []);
-    const columnSet = new Set(columnList);
-    return Array.from(columnSet);
-  };
-
-  getPrimaryKeyList = selectedElements => {
-    const { selectedTables = {} } = this.state;
-    const firstTable = selectedTables[1];
-    const secondTable = selectedTables[2];
-
-    const {
-      [firstTable]: firstTableKeys = [],
-      [secondTable]: secondTableKeys = []
-    } = selectedElements;
-
-    return firstTableKeys.filter(key => secondTableKeys.includes(key));
-  };
-
-  renderInfo = ({ icon, message }) => (
-    <span
-      style={{
-        fontSize: 10,
-        display: "flex",
-        paddingTop: 5,
-        paddingBottom: 5
-      }}
-    >
-      {icon}
-      <span style={{ paddingLeft: 5, alignSelf: "center" }}>{message}</span>
-    </span>
-  );
-
-  renderOperations = operation => {
-    const {
-      selectedElements = {},
-      joinLoader,
-      sortLoader,
-      finalJoinValue = [],
-      finalSortValue = []
-    } = this.state;
-    const primaryKeys = this.getPrimaryKeyList(selectedElements);
-    const isPrimaryKeyAvailable = primaryKeys.length > 0;
-    if (operation.key === "join") {
-      return (
-        <div>
-          <div style={{ paddingTop: 10, minWidth: 100 }}>
-            <span style={{ paddingRight: 10 }}>Select join type</span>
-            <Select
-              onChange={value => this.setState({ joinType: value })}
-              defaultValue="inner"
-            >
-              <Option value="inner">inner</Option>
-              <Option value="outer">outer</Option>
-            </Select>
-          </div>
-
-          {isPrimaryKeyAvailable ? (
-            <div style={{ minWidth: 100 }}>
-              <span style={{ paddingRight: 10 }}>Select primary key</span>
-              <Select
-                onChange={value => this.setState({ primaryKey: value })}
-                defaultValue={primaryKeys[0]}
-              >
-                {primaryKeys.map(column => (
-                  <Option value={column}>{column}</Option>
-                ))}
-              </Select>
-            </div>
-          ) : (
-            this.renderInfo({
-              message: "No common keys found",
-              icon: <Error fontSize="small" />
-            })
-          )}
-
-          <div>
-            <Button
-              type="primary"
-              disabled={!isPrimaryKeyAvailable}
-              onClick={() =>
-                this.setState({ joinLoader: true, finalJoinValue: [] }, () => {
-                  setTimeout(() => {
-                    this.joinTable();
-                    this.setState({ joinLoader: false });
-                  }, 2000);
-                })
-              }
-              style={{ marginTop: 5 }}
-            >
-              Join
-            </Button>
-            {joinLoader && (
-              <div style={{ marginTop: 20 }}>
-                <CircularProgress />
-              </div>
-            )}
-
-            {!!finalJoinValue.length && (
-              <div>
-                {this.renderInfo({
-                  message: "Join Successful",
-                  icon: <CheckCircle color={lightGreen[500]} fontSize="small" />
-                })}
-                <div>
-                  <Button
-                    type="primary"
-                    onClick={() => this.setState({ activeOperation: 1 })}
-                    style={{ marginTop: 5 }}
-                  >
-                    Next
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      this.setState({ showTable: true, rows: finalJoinValue })
-                    }
-                    style={{ marginTop: 5, marginLeft: 10 }}
-                  >
-                    Show Preview
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    } else if (operation.key === "sort") {
-      const columns = this.getAllColumns(selectedElements);
-      return (
-        <div>
-          <div>
-            <span style={{ paddingRight: 10 }}>Select sort field</span>
-            <Select
-              onChange={value => this.setState({ sortKey: value })}
-              defaultValue={columns[0]}
-            >
-              {columns.map(column => (
-                <Option value={column}>{column}</Option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <span style={{ paddingRight: 10 }}>Select sort order</span>
-            <Select
-              onChange={value => this.setState({ sortOrder: value })}
-              defaultValue="asc"
-            >
-              <Option value={"asc"}>ASC</Option>
-              <Option value={"desc"}>DESC</Option>
-            </Select>
-          </div>
-          <div>
-            <Button
-              type="primary"
-              onClick={() => {
-                this.setState({ sortLoader: true, finalSortValue: [] }, () => {
-                  setTimeout(() => {
-                    this.applySort();
-                    this.setState({ sortLoader: false });
-                  }, 2000);
-                })
-                
-              }}
-              style={{ marginTop: 5 }}
-            >
-              Apply Sort
-            </Button>
-            <Button
-              onClick={() => this.setState({ activeOperation: 0 })}
-              style={{ marginTop: 5, marginLeft: 10 }}
-            >
-              Back
-            </Button>
-          </div>
-          {sortLoader && (
-            <div style={{ marginTop: 20 }}>
-              <CircularProgress />
-            </div>
-          )}
-          {!!finalSortValue.length && (
-            <div>
-              {this.renderInfo({
-                message: "Sort Successful",
-                icon: <CheckCircle color={lightGreen[500]} fontSize="small" />
-              })}
-              <div>
-                <Button
-                  type="primary"
-                  onClick={() => this.setState({ activeOperation: 2 })}
-                  style={{ marginTop: 5 }}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    } else if (operation.key === "output") {
-      return (
-        <div>
-          <Button
-            type="primary"
-            onClick={() => this.setState({ rows: finalSortValue, showTable: true })}
-            style={{ marginTop: 5 }}
-          >
-            See final Output
-          </Button>
-        </div>
-      );
-    }
-  };
-
-  renderVisualize = () => {
-    const {
-      selectedElements = {},
-      tables = [],
-      selectedTables = {},
-      activeOperation
-    } = this.state;
-    if (!tables.length) {
-      return null;
-    }
-
-    const firstTable = selectedTables[1];
-    const secondTable = selectedTables[2];
-
-    const {
-      [firstTable]: firstTableKeys = [],
-      [secondTable]: secondTableKeys = []
-    } = selectedElements;
-
-    return (
-      <div>
-        <Row style={{ height: 250 }}>
-          <Col span={12}>
-            <Row>
-              <Droppable
-                types={["table"]}
-                onDrop={({ table }) =>
-                  this.setState({
-                    selectedTables: { ...selectedTables, 1: table }
-                  })
-                }
-              >
-                <Avatar
-                  style={{
-                    ...iconHeight,
-                    backgroundColor: firstTable ? lightGreen[500] : grey,
-                    color: "#fff"
-                  }}
-                >
-                  {firstTable || "Table 1"}
-                </Avatar>
-              </Droppable>
-            </Row>
-            <Row>
-              {firstTable ? (
-                <div style={{ marginTop: 10 }}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Selected Keys:
-                  </Typography>
-                  {firstTableKeys.length
-                    ? firstTableKeys.map(key => <Tag>{key}</Tag>)
-                    : "-"}
-                </div>
-              ) : null}
-            </Row>
-          </Col>
-          <Col span={12}>
-            <Droppable
-              types={["table"]}
-              onDrop={({ table }) =>
-                this.setState({
-                  selectedTables: { ...selectedTables, 2: table }
-                })
-              }
-            >
-              <Avatar
-                style={{
-                  ...iconHeight,
-                  backgroundColor: secondTable ? lightGreen[500] : grey,
-                  color: "#fff"
-                }}
-              >
-                {secondTable || "Table 2"}
-              </Avatar>
-            </Droppable>
-            {secondTable ? (
-              <div style={{ marginTop: 10 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Selected Keys
-                </Typography>
-                {secondTableKeys.length
-                  ? secondTableKeys.map(key => <Tag>{key}</Tag>)
-                  : "-"}
-              </div>
-            ) : null}
-          </Col>
-        </Row>
-
-        {firstTable && secondTable && Object.keys(selectedElements).length > 1 && (
-          <div>
-            <h3>Operations:</h3>
-            <Stepper activeStep={activeOperation} orientation="vertical">
-              {operations.map(operation => {
-                return (
-                  <Step key={operation.label}>
-                    <StepLabel>{operation.label}</StepLabel>
-                    <StepContent>
-                      <div>
-                        <Typography variant="subtitle2" gutterBottom>
-                          {operation.description}
-                        </Typography>
-                      </div>
-                      {this.renderOperations(operation)}
-                    </StepContent>
-                  </Step>
-                );
-              })}
-            </Stepper>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  applySort = async () => {
-    const { finalJoinValue = [], sortKey, sortOrder } = this.state;
-    const response = await axios({
-      ...params.post,
-      url: `${API_URL}proccessSort`,
-      data: {
-        sortKey,
-        isAscending: sortOrder === 'asc',
-        tableData: finalJoinValue
-      }
-    });
-    const { data } = response;
-    const rows = Object.keys(data).map(x => data[x]);
-    this.setState({ finalSortValue: rows });
-  };
-
-  joinTable = async () => {
-    const { selectedElements = {}, joinType, primaryKey } = this.state;
-    const response = await axios({
-      ...params.post,
-      url: `${API_URL}proccessJoin`,
-      data: {
-        joinType,
-        primaryKey,
-        tables: selectedElements
-      }
-    });
-    const { data } = response;
-    const rows = Object.keys(data).map(x => data[x]);
-    this.setState({ finalJoinValue: rows });
   };
 
   render() {
@@ -594,12 +200,12 @@ class App extends Component {
       databases,
       tables = [],
       showTable,
-      currentTable,
-      rows = [],
       selectedElements = {},
-      activeStep
+      activeStep,
+      rows = [],
+      columns = [],
+      tableKeys = []
     } = this.state;
-    const columns = this.getColumns(currentTable);
 
     return (
       <div style={{ padding: 50 }}>
@@ -649,9 +255,9 @@ class App extends Component {
                                   header={this.renderHeader(table)}
                                   key={table}
                                 >
-                                  {rows.length ? (
+                                  {tableKeys.length ? (
                                     <CheckboxGroup
-                                      options={Object.keys(rows[0])}
+                                      options={tableKeys}
                                       value={checklist}
                                       onChange={list =>
                                         this.onCheckboxChange(list, table)
@@ -671,7 +277,21 @@ class App extends Component {
             </Row>
           </Col>
           <Col span={12} style={{ paddingLeft: 50 }}>
-            {this.renderVisualize()}
+            <Visualize
+              selectedElements={selectedElements}
+              tables={tables}
+              showTable={({ table, columns = columns }) =>
+                this.setState({
+                  showTable: true,
+                  rows: table,
+                  columns: columns.map(column => ({
+                    title: column,
+                    dataIndex: column,
+                    key: column
+                  }))
+                })
+              }
+            />
           </Col>
         </Row>
         <Modal
