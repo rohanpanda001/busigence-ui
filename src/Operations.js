@@ -141,6 +141,7 @@ export default class Operations extends React.Component {
               <Select
                 onChange={value => this.setState({ primaryKey: value })}
                 defaultValue={primaryKeys[0]}
+                style={{ minWidth: 150 }}
               >
                 {primaryKeys.map(column => (
                   <Option value={column}>{column}</Option>
@@ -210,6 +211,7 @@ export default class Operations extends React.Component {
             <Select
               onChange={value => this.setState({ sortKey: value })}
               defaultValue={columns[0]}
+              style={{ minWidth: 150 }}
             >
               {columns.map(column => (
                 <Option value={column}>{column}</Option>
