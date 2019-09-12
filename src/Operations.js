@@ -83,14 +83,21 @@ export default class Operations extends React.Component {
 
   joinTable = async () => {
     const { joinType, primaryKey } = this.state;
-    const { selectedElements = {} } = this.props;
+    const {
+      selectedElements = {},
+      importedTableData = {},
+      format
+    } = this.props;
     const response = await axios({
       ...params.post,
       url: `${API_URL}proccessJoin`,
       data: {
         joinType,
         primaryKey,
-        tables: selectedElements
+        columns: Object.keys(selectedElements),
+        tables: selectedElements,
+        csv: format === "csv",
+        importedTableData
       }
     });
     const { data } = response;
@@ -212,7 +219,7 @@ export default class Operations extends React.Component {
           <div style={{ paddingTop: 10 }}>
             <span style={{ paddingRight: 10 }}>Select sort order</span>
             <Select
-              onChange={value => this.etState({ sortOrder: value })}
+              onChange={value => this.setState({ sortOrder: value })}
               defaultValue="asc"
             >
               <Option value={"asc"}>ASC</Option>
@@ -307,7 +314,15 @@ export default class Operations extends React.Component {
     const { selectedElements = {} } = this.props;
     const columns = getAllColumns(selectedElements);
     const headers = columns.reduce((acc, val) => ({ ...acc, [val]: val }), {});
-    exportCSVFile(document, headers, data, "output");
+    const filteredData = data.map(row =>
+      Object.keys(row)
+        .filter(key => columns.includes(key))
+        .reduce((acc, key) => {
+          acc[key] = row[key];
+          return acc;
+        }, {})
+    );
+    exportCSVFile(document, headers, filteredData, "output");
   };
 
   //   insertDB = async () => {

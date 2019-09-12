@@ -7,11 +7,9 @@ import { Grid, Step, Stepper, StepLabel } from "@material-ui/core";
 import {
   Radio,
   Row,
-  message,
   Col,
   Button,
   Icon,
-  Upload,
   Input,
   Collapse,
   Table,
@@ -36,30 +34,9 @@ class App extends Component {
       format: "mysql",
       selectedElements: {},
       activeStep: 0,
-      showTable: false,
-      joinType: "inner",
-      sortOrder: "asc"
+      showTable: false
     };
   }
-
-  getColumns = table => {
-    let tableKeys = [];
-    if (table === "customers") {
-      tableKeys = ["CustomerID", "CompanyName", "ContactName", "ContactTitle"];
-    } else if (table === "orders") {
-      tableKeys = [
-        "OrderID",
-        "CustomerID",
-        "EmployeeID",
-        "OrderDate",
-        "RequiredDate",
-        "ShippedDate",
-        "ShipVia",
-        "Freight"
-      ];
-    }
-    return tableKeys;
-  };
 
   submitMysql = async () => {
     const response = await axios.post(`${API_URL}showDatabases`);
@@ -99,20 +76,14 @@ class App extends Component {
     );
   };
 
-  onChange(info) {
-    if (info.file.status === "done") {
-      message.success(`${info.file.name} file uploaded successfully`);
-    } else if (info.file.status === "error") {
-      message.error(`${info.file.name} file upload failed.`);
-    }
-    console.log(info);
-  }
-
   renderCSV = () => {
     return (
       <div style={{ paddingTop: 20 }}>
         <ReactFileReader handleFiles={this.handleFiles} fileTypes={".csv"}>
-          <Button type="dashed">Upload</Button>
+          <Button type="dashed">
+            <Icon type="upload" style={{ paddingRight: 5 }} />
+            Upload
+          </Button>
         </ReactFileReader>
       </div>
     );
@@ -121,7 +92,7 @@ class App extends Component {
   handleFiles = files => {
     const { importedTables = [], importedTableData = {} } = this.state;
     const file = files[0];
-    const fileName = file.name;
+    const fileName = file.name.split(".")[0];
     const reader = new FileReader();
     reader.onload = e => {
       const result = e.target.result;
@@ -148,7 +119,11 @@ class App extends Component {
       });
       const { data = [] } = response;
       const tables = data.map(table => table[0]);
-      this.setState({ tables, canVisualize: tables.length > 1 });
+      this.setState({
+        tables,
+        canVisualize: tables.length > 1,
+        activeStep: tables.length > 1 ? 2 : 1
+      });
     }
   };
 
@@ -176,8 +151,11 @@ class App extends Component {
                   this.setState({
                     showTable: true,
                     rows: tableData,
-                    columns,
-                    tableKeys: columns
+                    columns: columns.map(x => ({
+                      title: x,
+                      dataIndex: x,
+                      key: x
+                    }))
                   });
                 }
               }}
@@ -198,7 +176,12 @@ class App extends Component {
         url: `${API_URL}showRows`,
         data: { table }
       });
-      const columns = this.getColumns(table);
+      const columnResponse = await axios({
+        ...params.post,
+        url: `${API_URL}showColumns`,
+        data: { table }
+      });
+      const columns = columnResponse.data.map(column => column[0]);
       const { data = [] } = response;
       const rows = getRows(data, columns);
       this.setState({
@@ -219,10 +202,12 @@ class App extends Component {
   };
 
   importedTableChange = table => {
-    const { importedTableData } = this.state;
-    const { [table]: tableData = [] } = importedTableData;
-    const tableKeys = Object.keys(tableData[0]);
-    this.setState({ tableKeys });
+    if (table) {
+      const { importedTableData } = this.state;
+      const { [table]: tableData = [] } = importedTableData;
+      const tableKeys = Object.keys(tableData[0]);
+      this.setState({ tableKeys });
+    }
   };
 
   renderSource = () => {
@@ -263,7 +248,7 @@ class App extends Component {
               </Panel>
             ))}
           </Collapse>
-        ) : Object.keys(importedTableData).length ? (
+        ) : format === "csv" && Object.keys(importedTableData).length ? (
           <div>
             <span>Tables imported</span>
             <Collapse accordion onChange={this.importedTableChange}>
@@ -296,7 +281,8 @@ class App extends Component {
       activeStep,
       rows = [],
       columns = [],
-      canVisualize
+      canVisualize,
+      importedTableData = {}
     } = this.state;
 
     return (
@@ -337,6 +323,8 @@ class App extends Component {
             <Visualize
               selectedElements={selectedElements}
               canVisualize={canVisualize}
+              importedTableData={importedTableData}
+              format={format}
               showTable={({ table, columns = columns }) =>
                 this.setState({
                   showTable: true,

@@ -14,7 +14,13 @@ export default class Visualize extends React.Component {
   }
 
   render() {
-    const { selectedElements = {}, canVisualize, showTable } = this.props;
+    const {
+      selectedElements = {},
+      canVisualize,
+      showTable,
+      importedTableData = {},
+      format
+    } = this.props;
     const { selectedTables = {} } = this.state;
     const iconHeight = { height: 100, width: 100 };
 
@@ -106,6 +112,8 @@ export default class Visualize extends React.Component {
               selectedElements={selectedElements}
               selectedTables={selectedTables}
               showTable={showTable}
+              importedTableData={importedTableData}
+              format={format}
             />
           )}
       </div>
